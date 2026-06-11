@@ -3,6 +3,7 @@
 namespace Cvcv\ThinkOpenApi\OpenApi;
 
 use Cvcv\ThinkOpenApi\Attribute\ApiDoc;
+use Cvcv\ThinkOpenApi\Attribute\ApiField;
 use Cvcv\ThinkOpenApi\Attribute\ApiGroup;
 use Cvcv\ThinkOpenApi\OpenApi\Response\ResponseSchemaFactory;
 use Cvcv\ThinkOpenApi\OpenApi\Response\ResultEnvelopeSchemaFactory;
@@ -373,13 +374,27 @@ final class Generator
 
         /** @var Validate $validator */
         $validator = new $doc->validate();
-        $fields = $this->protectedProperty($validator, 'field');
+        $property = $this->protectedPropertyReflection($validator, 'field');
+        $fields = $property->getValue($validator);
 
         if (!is_array($fields)) {
             return [];
         }
 
-        return array_filter($fields, is_string(...));
+        $fields = array_filter($fields, is_string(...));
+        $apiFields = $this->apiFieldDescriptions($property);
+
+        foreach ($apiFields as $name => $description) {
+            if (isset($fields[$name])) {
+                $fields[$name] = $fields[$name] === ''
+                    ? $description
+                    : $fields[$name] . '；' . $description;
+            } else {
+                $fields[$name] = $description;
+            }
+        }
+
+        return $fields;
     }
 
     private function operationId(string $class, string $method): string
@@ -422,10 +437,37 @@ final class Generator
 
     private function protectedProperty(object $object, string $name): mixed
     {
+        $property = $this->protectedPropertyReflection($object, $name);
+
+        return $property->getValue($object);
+    }
+
+    private function protectedPropertyReflection(object $object, string $name): ReflectionProperty
+    {
         $property = new ReflectionProperty($object, $name);
         $property->setAccessible(true);
 
-        return $property->getValue($object);
+        return $property;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function apiFieldDescriptions(ReflectionProperty $property): array
+    {
+        $attributes = $property->getAttributes(ApiField::class);
+
+        if ($attributes === []) {
+            return [];
+        }
+
+        /** @var ApiField $apiField */
+        $apiField = $attributes[0]->newInstance();
+
+        return array_filter(
+            $apiField->descriptions,
+            static fn (mixed $description): bool => is_string($description) && $description !== '',
+        );
     }
 
     /**
