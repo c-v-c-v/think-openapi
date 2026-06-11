@@ -42,7 +42,7 @@ enum ResponseDataType: string implements ResponseType
         $pageSchemaName = $itemSchemaName . 'Page';
 
         return new ResponseDataSchema(
-            ['$ref' => '#/components/schemas/' . $pageSchemaName],
+            SchemaRef::to($pageSchemaName),
             [
                 'PageMeta' => [
                     'type' => 'object',
@@ -62,7 +62,7 @@ enum ResponseDataType: string implements ResponseType
                             'type' => 'array',
                             'items' => $itemSchema,
                         ],
-                        'meta' => ['$ref' => '#/components/schemas/PageMeta'],
+                        'meta' => SchemaRef::to('PageMeta'),
                     ],
                 ],
             ],

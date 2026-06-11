@@ -86,15 +86,7 @@ final class EnumSchema
     {
         self::ensureEnum($enum);
 
-        $schema = [
-            '$ref' => '#/components/schemas/' . self::name($enum),
-        ];
-
-        if ($description !== null && $description !== '') {
-            $schema['description'] = $description;
-        }
-
-        return $schema;
+        return SchemaRef::to(self::name($enum), $description);
     }
 
     /**

@@ -827,7 +827,7 @@ final class Generator
             $response = $doc->response;
             $this->registerSchemas($response::openApiSchemas());
             $schemaName = $response::openApiSchemaName();
-            $itemSchema = ['$ref' => '#/components/schemas/' . $schemaName];
+            $itemSchema = SchemaRef::to($schemaName);
         }
 
         $dataSchema = $responseType->dataSchema(
