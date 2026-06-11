@@ -618,7 +618,7 @@ final class Generator
 
         $parts = $this->ruleParts($rule);
         $schema = [
-            'type' => in_array('integer', $parts, true) ? 'integer' : 'string',
+            'type' => $this->schemaTypeFromRuleParts($parts),
         ];
 
         if ($description !== null && $description !== '') {
@@ -643,12 +643,53 @@ final class Generator
                 continue;
             }
 
+            if (str_starts_with($part, 'egt:') || str_starts_with($part, '>=:')) {
+                $schema['minimum'] = $this->numericRuleValue($part);
+                continue;
+            }
+
+            if (str_starts_with($part, 'gt:') || str_starts_with($part, '>:')) {
+                $schema['exclusiveMinimum'] = $this->numericRuleValue($part);
+                continue;
+            }
+
+            if (str_starts_with($part, 'elt:') || str_starts_with($part, '<=:')) {
+                $schema['maximum'] = $this->numericRuleValue($part);
+                continue;
+            }
+
+            if (str_starts_with($part, 'lt:') || str_starts_with($part, '<:')) {
+                $schema['exclusiveMaximum'] = $this->numericRuleValue($part);
+                continue;
+            }
+
             if (str_starts_with($part, 'in:')) {
                 $schema['enum'] = explode(',', substr($part, 3));
             }
         }
 
         return $schema;
+    }
+
+    /**
+     * @param list<string> $parts
+     */
+    private function schemaTypeFromRuleParts(array $parts): string
+    {
+        foreach (['integer', 'number', 'float', 'boolean', 'array'] as $type) {
+            if (in_array($type, $parts, true)) {
+                return $type === 'float' ? 'number' : $type;
+            }
+        }
+
+        return 'string';
+    }
+
+    private function numericRuleValue(string $part): int|float
+    {
+        $value = substr($part, strpos($part, ':') + 1);
+
+        return str_contains($value, '.') ? (float) $value : (int) $value;
     }
 
     private function isRequired(mixed $rule): bool
