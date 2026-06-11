@@ -25,10 +25,7 @@ enum ResponseDataType: string implements ResponseType
 
         return match ($this) {
             self::Item => new ResponseDataSchema($itemSchema),
-            self::List => new ResponseDataSchema([
-                'type' => 'array',
-                'items' => $itemSchema,
-            ]),
+            self::List => new ResponseDataSchema(Schema::arrayOf($itemSchema)),
             self::Page => $this->pageSchema($itemSchemaName, $itemSchema),
             self::None => new ResponseDataSchema(['type' => 'null']),
         };
