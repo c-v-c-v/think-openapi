@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{$title|htmlentities} - Stoplight</title>
+    <script src="https://unpkg.com/@stoplight/elements/web-components.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+
+        elements-api {
+            display: block;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<elements-api
+    apiDescriptionUrl="{$specUrl|htmlentities}"
+    router="hash"
+    layout="sidebar"
+></elements-api>
+</body>
+</html>

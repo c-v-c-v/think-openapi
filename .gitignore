@@ -1,0 +1,19 @@
+/vendor/
+/composer.lock
+/.phpunit.result.cache
+
+# IDEs and editors
+/.idea/
+/.vscode/
+/.fleet/
+/.zed/
+*.iml
+
+# Project metadata
+/.settings/
+/.buildpath
+/.project
+
+# OS files
+.DS_Store
+Thumbs.db
