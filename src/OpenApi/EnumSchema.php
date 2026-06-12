@@ -10,6 +10,11 @@ use UnitEnum;
 final class EnumSchema
 {
     /**
+     * @var array<string, array{enum: class-string<UnitEnum>, description: string|null}>
+     */
+    private static array $references = [];
+
+    /**
      * @param class-string<UnitEnum> $enum
      */
     public static function name(string $enum): string
@@ -86,7 +91,39 @@ final class EnumSchema
     {
         self::ensureEnum($enum);
 
-        return SchemaRef::to(self::name($enum), $description);
+        $schemaName = self::name($enum);
+        $description = $description !== '' ? $description : null;
+
+        if (!isset(self::$references[$schemaName]) || self::$references[$schemaName]['description'] === null) {
+            self::$references[$schemaName] = [
+                'enum' => $enum,
+                'description' => $description,
+            ];
+        }
+
+        return SchemaRef::to($schemaName, $description);
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return array{enum: class-string<UnitEnum>, description: string|null}|null
+     */
+    public static function referenceFrom(array $schema): ?array
+    {
+        $ref = $schema['$ref'] ?? null;
+
+        if (!is_string($ref) || !str_starts_with($ref, '#/components/schemas/')) {
+            return null;
+        }
+
+        $schemaName = substr($ref, strlen('#/components/schemas/'));
+
+        return self::$references[$schemaName] ?? null;
+    }
+
+    public static function flushReferences(): void
+    {
+        self::$references = [];
     }
 
     /**

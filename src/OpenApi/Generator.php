@@ -44,6 +44,7 @@ final class Generator
         $paths = [];
         $this->schemas = [];
         $this->registeredSchemaProviders = [];
+        EnumSchema::flushReferences();
         SchemaRef::flushProviders();
 
         foreach ($this->routeList() as $route) {
@@ -904,13 +905,27 @@ final class Generator
     }
 
     /**
-     * @param array<string, class-string<\UnitEnum>> $enums
+     * @param list<class-string<\UnitEnum>> $enums
      */
     private function registerEnumSchemas(array $enums): void
     {
         foreach (array_unique($enums) as $enum) {
-            $this->schemas[EnumSchema::name($enum)] = EnumSchema::schema($enum);
+            $this->registerEnumSchema($enum);
         }
+    }
+
+    /**
+     * @param class-string<\UnitEnum> $enum
+     */
+    private function registerEnumSchema(string $enum, ?string $description = null): void
+    {
+        $name = EnumSchema::name($enum);
+
+        if (isset($this->schemas[$name])) {
+            return;
+        }
+
+        $this->schemas[$name] = EnumSchema::schema($enum, $description);
     }
 
     /**
@@ -927,6 +942,10 @@ final class Generator
         foreach ($schemas as $schema) {
             foreach ($this->schemaProvidersIn($schema) as $provider) {
                 $this->registerSchemaProvider($provider, $availableSchemaNames);
+            }
+
+            foreach ($this->enumReferencesIn($schema) as $reference) {
+                $this->registerEnumSchema($reference['enum'], $reference['description']);
             }
         }
     }
@@ -977,6 +996,37 @@ final class Generator
         foreach ($schema as $value) {
             if (is_array($value)) {
                 $this->collectSchemaProviders($value, $providers);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return list<array{enum: class-string<\UnitEnum>, description: string|null}>
+     */
+    private function enumReferencesIn(array $schema): array
+    {
+        $references = [];
+        $this->collectEnumReferences($schema, $references);
+
+        return array_values($references);
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @param array<class-string<\UnitEnum>, array{enum: class-string<\UnitEnum>, description: string|null}> $references
+     */
+    private function collectEnumReferences(array $schema, array &$references): void
+    {
+        $reference = EnumSchema::referenceFrom($schema);
+
+        if ($reference !== null && !isset($references[$reference['enum']])) {
+            $references[$reference['enum']] = $reference;
+        }
+
+        foreach ($schema as $value) {
+            if (is_array($value)) {
+                $this->collectEnumReferences($value, $references);
             }
         }
     }
