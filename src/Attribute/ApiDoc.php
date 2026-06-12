@@ -12,6 +12,7 @@ final readonly class ApiDoc
      * @param array<int, string> $tags
      * @param class-string|null $validate
      * @param class-string|null $response
+     * @param array<string, mixed> $extensions
      */
     public function __construct(
         public ?string $summary = null,
@@ -23,6 +24,7 @@ final readonly class ApiDoc
         public ?ResponseType $responseType = null,
         public ?int $status = null,
         public bool $requestFieldsRequired = true,
+        public array $extensions = [],
     ) {
     }
 }

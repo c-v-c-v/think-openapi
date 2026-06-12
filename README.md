@@ -106,6 +106,29 @@ php think docs:generate
 - Stoplight Elements：`/docs/api/stoplight`
 - OpenAPI JSON：`/docs/api.json`
 
+## Operation 扩展字段
+
+如果需要给单个 operation 添加 OpenAPI 扩展字段，可以使用 `ApiDoc::extensions`。只会透传 `x-*` 开头的字段；如果同名字段已经由认证解析器等内部逻辑生成，则不会被覆盖。
+
+```php
+#[ApiDoc(
+    summary: '用户列表',
+    response: UserResource::class,
+    extensions: [
+        'x-code-samples' => [
+            [
+                'lang' => 'curl',
+                'source' => 'curl /users',
+            ],
+        ],
+    ],
+)]
+public function index(): Json
+{
+    return json();
+}
+```
+
 ## Validate 规则
 
 当设置了 `ApiDoc::validate` 时，生成器会读取验证器中的 protected `$rule`、`$field` 和 `$scene` 属性。

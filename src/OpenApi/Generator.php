@@ -198,6 +198,12 @@ final class Generator
             $operation[$name] = $value;
         }
 
+        foreach ($doc->extensions as $name => $value) {
+            if (is_string($name) && str_starts_with($name, 'x-') && !array_key_exists($name, $operation)) {
+                $operation[$name] = $value;
+            }
+        }
+
         if (in_array($httpMethod, ['post', 'put', 'patch'], true) && $rules !== []) {
             $operation['requestBody'] = [
                 'required' => $doc->requestFieldsRequired,
