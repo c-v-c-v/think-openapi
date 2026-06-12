@@ -128,7 +128,14 @@ final class ValidateRuleSchemaMapper
             }
 
             if (str_starts_with($part, 'in:')) {
-                $schema['enum'] = explode(',', substr($part, 3));
+                $schema['enum'] = $this->ruleValueList($part, 3, $schema['type']);
+                continue;
+            }
+
+            if (str_starts_with($part, 'notIn:')) {
+                $schema['not'] = [
+                    'enum' => $this->ruleValueList($part, 6, $schema['type']),
+                ];
             }
         }
 
@@ -363,6 +370,38 @@ final class ValidateRuleSchemaMapper
         $value = substr($part, strpos($part, ':') + 1);
 
         return str_contains($value, '.') ? (float) $value : (int) $value;
+    }
+
+    /**
+     * @return list<int|float|bool|string>
+     */
+    private function ruleValueList(string $part, int $offset, string $schemaType): array
+    {
+        return array_map(
+            fn (string $value): int|float|bool|string => $this->castRuleValue(trim($value), $schemaType),
+            explode(',', substr($part, $offset)),
+        );
+    }
+
+    private function castRuleValue(string $value, string $schemaType): int|float|bool|string
+    {
+        if ($schemaType === 'integer' && preg_match('/^-?\d+$/', $value) === 1) {
+            return (int) $value;
+        }
+
+        if ($schemaType === 'number' && is_numeric($value)) {
+            return str_contains($value, '.') ? (float) $value : (int) $value;
+        }
+
+        if ($schemaType === 'boolean') {
+            return match (strtolower($value)) {
+                '1', 'true' => true,
+                '0', 'false' => false,
+                default => $value,
+            };
+        }
+
+        return $value;
     }
 
     private function normalizeNamedRulePart(string $name, mixed $value): ?string

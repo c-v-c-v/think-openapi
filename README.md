@@ -244,7 +244,8 @@ final class UserValidate extends Validate
 - `between:min,max` -> `minimum` / `maximum`
 - `egt:n`、`>=:n`、`gt:n`、`>:n`、`elt:n`、`<=:n`、`lt:n`、`<:n`
 - `multipleOf:n` -> `multipleOf`
-- `in:a,b,c` -> 内联 enum 值
+- `in:a,b,c` -> 按字段类型生成内联 enum 值
+- `notIn:a,b,c` -> `not.enum`
 - `regex:/.../` -> `pattern`；带修饰符或无法安全转换时保留 `x-thinkphp-rule`
 - `alpha`、`alphaNum`、`alphaDash`、`chs`、`chsAlpha`、`chsAlphaNum`、`chsDash`、`mobile`、`idCard`、`zip` -> 基于 ThinkPHP 内置正则生成 `pattern`
 - `['max' => 10]`、`['in' => ['a', 'b']]` 等关联数组规则会按 ThinkPHP 规则名归一化后推导
