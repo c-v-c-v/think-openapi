@@ -25,6 +25,11 @@ final class Generator
      */
     private array $schemas = [];
 
+    /**
+     * @var array<class-string<SchemaProvider>, true>
+     */
+    private array $registeredSchemaProviders = [];
+
     public function __construct(
         private readonly App $app,
         private readonly ?RouteAuthResolver $authResolver = null,
@@ -38,6 +43,8 @@ final class Generator
     {
         $paths = [];
         $this->schemas = [];
+        $this->registeredSchemaProviders = [];
+        SchemaRef::flushProviders();
 
         foreach ($this->routeList() as $route) {
             $endpoint = $this->endpointFromRoute($route['route'] ?? null);
@@ -866,7 +873,7 @@ final class Generator
         if ($responseType !== ResponseDataType::None) {
             /** @var class-string<SchemaProvider> $response */
             $response = $doc->response;
-            $this->registerSchemas($response::openApiSchemas());
+            $this->registerSchemaProvider($response);
             $schemaName = $response::openApiSchemaName();
             $itemSchema = SchemaRef::to($schemaName);
         }
@@ -911,8 +918,66 @@ final class Generator
      */
     private function registerSchemas(array $schemas): void
     {
+        $availableSchemaNames = array_fill_keys(array_keys($schemas), true);
+
         foreach ($schemas as $name => $schema) {
             $this->schemas[$name] = $schema;
+        }
+
+        foreach ($schemas as $schema) {
+            foreach ($this->schemaProvidersIn($schema) as $provider) {
+                $this->registerSchemaProvider($provider, $availableSchemaNames);
+            }
+        }
+    }
+
+    /**
+     * @param class-string<SchemaProvider> $provider
+     * @param array<string, true> $availableSchemaNames
+     */
+    private function registerSchemaProvider(string $provider, array $availableSchemaNames = []): void
+    {
+        if (isset($this->registeredSchemaProviders[$provider])) {
+            return;
+        }
+
+        if (isset($availableSchemaNames[$provider::openApiSchemaName()])) {
+            $this->registeredSchemaProviders[$provider] = true;
+            return;
+        }
+
+        $this->registeredSchemaProviders[$provider] = true;
+        $this->registerSchemas($provider::openApiSchemas());
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return list<class-string<SchemaProvider>>
+     */
+    private function schemaProvidersIn(array $schema): array
+    {
+        $providers = [];
+        $this->collectSchemaProviders($schema, $providers);
+
+        return array_values(array_unique($providers));
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @param list<class-string<SchemaProvider>> $providers
+     */
+    private function collectSchemaProviders(array $schema, array &$providers): void
+    {
+        $provider = SchemaRef::providerFrom($schema);
+
+        if ($provider !== null) {
+            $providers[] = $provider;
+        }
+
+        foreach ($schema as $value) {
+            if (is_array($value)) {
+                $this->collectSchemaProviders($value, $providers);
+            }
         }
     }
 

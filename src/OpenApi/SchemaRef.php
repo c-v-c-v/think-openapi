@@ -6,6 +6,11 @@ use InvalidArgumentException;
 
 final class SchemaRef
 {
+    /**
+     * @var array<string, class-string<SchemaProvider>>
+     */
+    private static array $providers = [];
+
     public static function to(string $schemaName, ?string $description = null): array
     {
         $schema = [
@@ -33,6 +38,30 @@ final class SchemaRef
             ));
         }
 
+        self::$providers[$provider::openApiSchemaName()] = $provider;
+
         return self::to($provider::openApiSchemaName(), $description);
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return class-string<SchemaProvider>|null
+     */
+    public static function providerFrom(array $schema): ?string
+    {
+        $ref = $schema['$ref'] ?? null;
+
+        if (!is_string($ref) || !str_starts_with($ref, '#/components/schemas/')) {
+            return null;
+        }
+
+        $schemaName = substr($ref, strlen('#/components/schemas/'));
+
+        return self::$providers[$schemaName] ?? null;
+    }
+
+    public static function flushProviders(): void
+    {
+        self::$providers = [];
     }
 }
