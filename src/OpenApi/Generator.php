@@ -33,6 +33,7 @@ final class Generator
     private array $registeredSchemaProviders = [];
 
     private readonly ValidateRuleSchemaMapper $ruleSchemaMapper;
+    private readonly RequestBodySchemaBuilder $requestBodySchemaBuilder;
 
     public function __construct(
         private readonly App $app,
@@ -40,9 +41,11 @@ final class Generator
         private readonly ?RouteListProvider $routeListProvider = null,
         private readonly ?ResponseSchemaFactory $responseSchemaFactory = null,
         ?ValidateRuleSchemaMapper $ruleSchemaMapper = null,
+        ?RequestBodySchemaBuilder $requestBodySchemaBuilder = null,
     )
     {
         $this->ruleSchemaMapper = $ruleSchemaMapper ?? new ValidateRuleSchemaMapper();
+        $this->requestBodySchemaBuilder = $requestBodySchemaBuilder ?? new RequestBodySchemaBuilder($this->ruleSchemaMapper);
     }
 
     public function generate(): array
@@ -204,7 +207,12 @@ final class Generator
                 'required' => $doc->requestFieldsRequired,
                 'content' => [
                     'application/json' => [
-                        'schema' => $this->objectSchema($rules, $doc->requestFieldsRequired, $fields),
+                        'schema' => $this->requestBodySchemaBuilder->objectSchema(
+                            $rules,
+                            $doc->requestFieldsRequired,
+                            $fields,
+                            $this->schemaFromRule(...),
+                        ),
                     ],
                 ],
             ];
@@ -658,80 +666,6 @@ final class Generator
         }
 
         return $parameters;
-    }
-
-    /**
-     * @param array<string, mixed> $rules
-     * @param array<string, string> $fields
-     * @return array<string, mixed>
-     */
-    private function objectSchema(array $rules, bool $includeRequired, array $fields): array
-    {
-        $schema = [
-            'type' => 'object',
-            'properties' => [],
-        ];
-
-        foreach ($rules as $name => $rule) {
-            $this->addObjectProperty(
-                $schema,
-                explode('.', $name),
-                $this->schemaFromRule($rule, $fields[$name] ?? null),
-                $includeRequired && $this->ruleSchemaMapper->isRequired($rule),
-            );
-        }
-
-        return $schema;
-    }
-
-    /**
-     * @param array<string, mixed> $schema
-     * @param array<int, string> $segments
-     * @param array<string, mixed> $property
-     */
-    private function addObjectProperty(array &$schema, array $segments, array $property, bool $required): void
-    {
-        $name = array_shift($segments);
-
-        if ($name === null || $name === '') {
-            return;
-        }
-
-        if ($required) {
-            $this->markRequired($schema, $name);
-        }
-
-        if ($segments === []) {
-            $schema['properties'][$name] = $property;
-            return;
-        }
-
-        if (!isset($schema['properties'][$name]) || !is_array($schema['properties'][$name])) {
-            $schema['properties'][$name] = [
-                'type' => 'object',
-                'properties' => [],
-            ];
-        }
-
-        if (!isset($schema['properties'][$name]['properties']) || !is_array($schema['properties'][$name]['properties'])) {
-            $schema['properties'][$name]['properties'] = [];
-        }
-
-        $this->addObjectProperty($schema['properties'][$name], $segments, $property, $required);
-    }
-
-    /**
-     * @param array<string, mixed> $schema
-     */
-    private function markRequired(array &$schema, string $name): void
-    {
-        if (!isset($schema['required']) || !is_array($schema['required'])) {
-            $schema['required'] = [];
-        }
-
-        if (!in_array($name, $schema['required'], true)) {
-            $schema['required'][] = $name;
-        }
     }
 
     /**
