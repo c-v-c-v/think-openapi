@@ -96,6 +96,59 @@ final class Schema
     }
 
     /**
+     * @param array<string, mixed> $schema
+     * @param array<string, mixed> $metadata
+     * @return array<string, mixed>
+     */
+    public static function with(array $schema, array $metadata): array
+    {
+        foreach ($metadata as $name => $value) {
+            if (!is_string($name) || $name === '') {
+                continue;
+            }
+
+            if (str_starts_with($name, 'x-')) {
+                $schema[$name] = $value;
+            }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public static function format(array $schema, string $format): array
+    {
+        $schema['format'] = $format;
+
+        return $schema;
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public static function example(array $schema, mixed $example): array
+    {
+        $schema['example'] = $example;
+
+        return $schema;
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public static function deprecated(array $schema, bool $deprecated = true): array
+    {
+        $schema['deprecated'] = $deprecated;
+
+        return $schema;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private static function type(string $type, ?string $description): array

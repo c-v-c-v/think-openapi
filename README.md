@@ -275,11 +275,21 @@ final class UserResource implements SchemaProvider
         return ObjectSchema::make(self::openApiSchemaName())
             ->property('id', Schema::integer('用户 ID'), required: true)
             ->property('name', Schema::string('用户名称'), required: true)
-            ->property('email', Schema::string('邮箱地址'), required: true)
+            ->property('email', Schema::format(Schema::string('邮箱地址'), 'email'), required: true)
             ->components();
     }
 }
 ```
+
+常用 schema 元数据可以用 helper 叠加：
+
+```php
+Schema::example(Schema::string('用户名称'), 'Alice');
+Schema::deprecated(Schema::string('旧字段'));
+Schema::with(Schema::string(), ['x-displayName' => '状态']);
+```
+
+标准字段使用专用 helper；`Schema::with()` 只透传 OpenAPI 扩展字段，也就是 `x-*`。
 
 使用 `ResponseDataType` 描述 `data` 字段结构：
 
