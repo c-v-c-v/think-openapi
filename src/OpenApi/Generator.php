@@ -3,7 +3,6 @@
 namespace Cvcv\ThinkOpenApi\OpenApi;
 
 use Cvcv\ThinkOpenApi\Attribute\ApiDoc;
-use Cvcv\ThinkOpenApi\Attribute\ApiField;
 use Cvcv\ThinkOpenApi\Attribute\ApiGroup;
 use Cvcv\ThinkOpenApi\Attribute\ApiParam;
 use Cvcv\ThinkOpenApi\Attribute\ApiResponse;
@@ -16,9 +15,7 @@ use Cvcv\ThinkOpenApi\OpenApi\Security\RouteAuthResolver;
 use RuntimeException;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionProperty;
 use think\App;
-use think\Validate;
 
 final class Generator
 {
@@ -34,6 +31,7 @@ final class Generator
 
     private readonly ValidateRuleSchemaMapper $ruleSchemaMapper;
     private readonly RequestBodySchemaBuilder $requestBodySchemaBuilder;
+    private readonly ValidateMetadataReader $validateMetadataReader;
 
     public function __construct(
         private readonly App $app,
@@ -42,10 +40,12 @@ final class Generator
         private readonly ?ResponseSchemaFactory $responseSchemaFactory = null,
         ?ValidateRuleSchemaMapper $ruleSchemaMapper = null,
         ?RequestBodySchemaBuilder $requestBodySchemaBuilder = null,
+        ?ValidateMetadataReader $validateMetadataReader = null,
     )
     {
         $this->ruleSchemaMapper = $ruleSchemaMapper ?? new ValidateRuleSchemaMapper();
         $this->requestBodySchemaBuilder = $requestBodySchemaBuilder ?? new RequestBodySchemaBuilder($this->ruleSchemaMapper);
+        $this->validateMetadataReader = $validateMetadataReader ?? new ValidateMetadataReader();
     }
 
     public function generate(): array
@@ -155,8 +155,8 @@ final class Generator
      */
     private function operation(ReflectionMethod $method, string $httpMethod, string $path, ApiDoc $doc, array $route): array
     {
-        $rules = $this->validationRules($doc);
-        $fields = $this->validationFields($doc);
+        $rules = $this->validateMetadataReader->rules($doc);
+        $fields = $this->validateMetadataReader->fields($doc);
         $parameters = $this->pathParameters($path);
         $auth = $this->auth($route);
         $comment = $this->methodComment($method);
@@ -164,7 +164,7 @@ final class Generator
         $summary = $doc->summary ?: ($comment['summary'] ?: $this->operationId($class, $method->getName()));
         $description = $doc->description ?: $comment['description'];
 
-        $this->registerEnumSchemas($this->enumRules($rules));
+        $this->registerEnumSchemas($this->ruleSchemaMapper->enumRules($rules));
 
         if ($httpMethod === 'get') {
             $parameters = array_merge($parameters, $this->queryParameters($rules, $fields));
@@ -393,111 +393,11 @@ final class Generator
         return array_values(array_unique([...$tags, ...$doc->tags]));
     }
 
-    /**
-     * @return array<string, string>
-     */
-    private function validationFields(ApiDoc $doc): array
-    {
-        if ($doc->validate === null || !class_exists($doc->validate)) {
-            return [];
-        }
-
-        /** @var Validate $validator */
-        $validator = new $doc->validate();
-        $property = $this->protectedPropertyReflection($validator, 'field');
-        $fields = $property->getValue($validator);
-
-        if (!is_array($fields)) {
-            return [];
-        }
-
-        $fields = array_filter($fields, is_string(...));
-        $apiFields = $this->apiFieldDescriptions($property);
-
-        foreach ($apiFields as $name => $description) {
-            if (isset($fields[$name])) {
-                $fields[$name] = $fields[$name] === ''
-                    ? $description
-                    : $fields[$name] . '；' . $description;
-            } else {
-                $fields[$name] = $description;
-            }
-        }
-
-        return $fields;
-    }
-
     private function operationId(string $class, string $method): string
     {
         $shortName = (new ReflectionClass($class))->getShortName();
 
         return lcfirst($shortName) . ucfirst($method);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function validationRules(ApiDoc $doc): array
-    {
-        if ($doc->validate === null || !class_exists($doc->validate)) {
-            return [];
-        }
-
-        /** @var Validate $validator */
-        $validator = new $doc->validate();
-        $rules = $this->protectedProperty($validator, 'rule');
-
-        if (!is_array($rules)) {
-            return [];
-        }
-
-        if ($doc->scene === null) {
-            return $rules;
-        }
-
-        $scenes = $this->protectedProperty($validator, 'scene');
-        $fields = is_array($scenes) ? ($scenes[$doc->scene] ?? []) : [];
-
-        if (!is_array($fields)) {
-            return [];
-        }
-
-        return array_intersect_key($rules, array_flip($fields));
-    }
-
-    private function protectedProperty(object $object, string $name): mixed
-    {
-        $property = $this->protectedPropertyReflection($object, $name);
-
-        return $property->getValue($object);
-    }
-
-    private function protectedPropertyReflection(object $object, string $name): ReflectionProperty
-    {
-        $property = new ReflectionProperty($object, $name);
-        $property->setAccessible(true);
-
-        return $property;
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function apiFieldDescriptions(ReflectionProperty $property): array
-    {
-        $attributes = $property->getAttributes(ApiField::class);
-
-        if ($attributes === []) {
-            return [];
-        }
-
-        /** @var ApiField $apiField */
-        $apiField = $attributes[0]->newInstance();
-
-        return array_filter(
-            $apiField->descriptions,
-            static fn (mixed $description): bool => is_string($description) && $description !== '',
-        );
     }
 
     /**
@@ -673,58 +573,13 @@ final class Generator
      */
     private function schemaFromRule(mixed $rule, ?string $description = null): array
     {
-        $enum = $this->enumFromRule($rule);
+        $enum = $this->ruleSchemaMapper->enumFromRule($rule);
 
         if ($enum !== null) {
             return EnumSchema::reference($enum, $description);
         }
 
         return $this->ruleSchemaMapper->schemaFromRule($rule, $description);
-    }
-
-    /**
-     * @param array<string, mixed> $rules
-     * @return list<class-string<\UnitEnum>>
-     */
-    private function enumRules(array $rules): array
-    {
-        $enums = [];
-
-        foreach ($rules as $rule) {
-            $enum = $this->enumFromRule($rule);
-
-            if ($enum !== null) {
-                $enums[] = $enum;
-            }
-        }
-
-        return array_values(array_unique($enums));
-    }
-
-    /**
-     * @return class-string<\UnitEnum>|null
-     */
-    private function enumFromRule(mixed $rule): ?string
-    {
-        foreach ($this->ruleSchemaMapper->rawRuleParts($rule) as $part) {
-            if (!is_string($part)) {
-                continue;
-            }
-
-            if (enum_exists($part)) {
-                return $part;
-            }
-
-            if (str_starts_with($part, 'enum:')) {
-                $enum = substr($part, 5);
-
-                if (enum_exists($enum)) {
-                    return $enum;
-                }
-            }
-        }
-
-        return null;
     }
 
     /**

@@ -141,6 +141,51 @@ final class ValidateRuleSchemaMapper
     }
 
     /**
+     * @param array<string, mixed> $rules
+     * @return list<class-string<\UnitEnum>>
+     */
+    public function enumRules(array $rules): array
+    {
+        $enums = [];
+
+        foreach ($rules as $rule) {
+            $enum = $this->enumFromRule($rule);
+
+            if ($enum !== null) {
+                $enums[] = $enum;
+            }
+        }
+
+        return array_values(array_unique($enums));
+    }
+
+    /**
+     * @return class-string<\UnitEnum>|null
+     */
+    public function enumFromRule(mixed $rule): ?string
+    {
+        foreach ($this->rawRuleParts($rule) as $part) {
+            if (!is_string($part)) {
+                continue;
+            }
+
+            if (enum_exists($part)) {
+                return $part;
+            }
+
+            if (str_starts_with($part, 'enum:')) {
+                $enum = substr($part, 5);
+
+                if (enum_exists($enum)) {
+                    return $enum;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @return list<string>
      */
     public function ruleParts(mixed $rule): array

@@ -5,11 +5,8 @@ namespace Cvcv\ThinkOpenApi\OpenApi;
 use Cvcv\ThinkOpenApi\Attribute\ApiDoc;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionProperty;
 use Throwable;
-use UnitEnum;
 use think\App;
-use think\Validate;
 
 final class OpenApiLinter
 {
@@ -21,6 +18,8 @@ final class OpenApiLinter
     public function __construct(
         private readonly App $app,
         private readonly ?RouteListProvider $routeListProvider = null,
+        private readonly ?ValidateMetadataReader $validateMetadataReader = null,
+        private readonly ?ValidateRuleSchemaMapper $ruleSchemaMapper = null,
     ) {
     }
 
@@ -381,7 +380,7 @@ final class OpenApiLinter
         }
 
         foreach ($routes as $route) {
-            foreach ($this->enumRules($this->validationRules($route['doc'])) as $enum) {
+            foreach ($this->ruleMapper()->enumRules($this->metadataReader()->rules($route['doc'])) as $enum) {
                 $name = EnumSchema::name($enum);
 
                 if (!isset($schemas[$name]) || !is_array($schemas[$name]) || !array_key_exists('enum', $schemas[$name])) {
@@ -395,104 +394,14 @@ final class OpenApiLinter
         }
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function validationRules(ApiDoc $doc): array
+    private function metadataReader(): ValidateMetadataReader
     {
-        if ($doc->validate === null || !class_exists($doc->validate)) {
-            return [];
-        }
-
-        /** @var Validate $validator */
-        $validator = new $doc->validate();
-        $rules = $this->protectedProperty($validator, 'rule');
-
-        if (!is_array($rules)) {
-            return [];
-        }
-
-        if ($doc->scene === null) {
-            return $rules;
-        }
-
-        $scenes = $this->protectedProperty($validator, 'scene');
-        $fields = is_array($scenes) ? ($scenes[$doc->scene] ?? []) : [];
-
-        if (!is_array($fields)) {
-            return [];
-        }
-
-        return array_intersect_key($rules, array_flip($fields));
+        return $this->validateMetadataReader ?? new ValidateMetadataReader();
     }
 
-    private function protectedProperty(object $object, string $name): mixed
+    private function ruleMapper(): ValidateRuleSchemaMapper
     {
-        $property = new ReflectionProperty($object, $name);
-        $property->setAccessible(true);
-
-        return $property->getValue($object);
-    }
-
-    /**
-     * @param array<string, mixed> $rules
-     * @return list<class-string<UnitEnum>>
-     */
-    private function enumRules(array $rules): array
-    {
-        $enums = [];
-
-        foreach ($rules as $rule) {
-            $enum = $this->enumFromRule($rule);
-
-            if ($enum !== null) {
-                $enums[] = $enum;
-            }
-        }
-
-        return array_values(array_unique($enums));
-    }
-
-    /**
-     * @return class-string<UnitEnum>|null
-     */
-    private function enumFromRule(mixed $rule): ?string
-    {
-        foreach ($this->rawRuleParts($rule) as $part) {
-            if (!is_string($part)) {
-                continue;
-            }
-
-            if (enum_exists($part)) {
-                return $part;
-            }
-
-            if (str_starts_with($part, 'enum:')) {
-                $enum = substr($part, 5);
-
-                if (enum_exists($enum)) {
-                    return $enum;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @return list<mixed>
-     */
-    private function rawRuleParts(mixed $rule): array
-    {
-        if (is_string($rule)) {
-            return explode('|', $rule);
-        }
-
-        if (is_array($rule)) {
-            return array_values($rule);
-        }
-
-        return [];
+        return $this->ruleSchemaMapper ?? new ValidateRuleSchemaMapper();
     }
 
     /**
