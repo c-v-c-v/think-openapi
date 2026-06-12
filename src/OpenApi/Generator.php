@@ -6,6 +6,7 @@ use Cvcv\ThinkOpenApi\Attribute\ApiDoc;
 use Cvcv\ThinkOpenApi\Attribute\ApiField;
 use Cvcv\ThinkOpenApi\Attribute\ApiGroup;
 use Cvcv\ThinkOpenApi\Attribute\ApiParam;
+use Cvcv\ThinkOpenApi\Attribute\ApiResponse;
 use Cvcv\ThinkOpenApi\OpenApi\Response\ResponseSchemaFactory;
 use Cvcv\ThinkOpenApi\OpenApi\Response\ResultEnvelopeSchemaFactory;
 use Cvcv\ThinkOpenApi\OpenApi\Security\AuthRequirement;
@@ -182,7 +183,7 @@ final class Generator
             'operationId' => $this->operationId($class, $method->getName()),
             'tags' => $this->tags($class, $doc),
             'parameters' => $parameters,
-            'responses' => $this->responses($doc, $httpMethod),
+            'responses' => $this->responses($method, $doc, $httpMethod),
         ];
 
         if ($description !== null && $description !== '') {
@@ -1143,19 +1144,19 @@ final class Generator
     /**
      * @return array<string, mixed>
      */
-    private function responses(ApiDoc $doc, string $httpMethod): array
+    private function responses(ReflectionMethod $method, ApiDoc $doc, string $httpMethod): array
     {
         $status = $this->responseStatus($doc, $httpMethod);
 
         if ($status === 204) {
-            return [
+            return $this->mergeApiResponses([
                 '204' => [
                     'description' => 'No Content',
                 ],
-            ];
+            ], $this->apiResponses($method));
         }
 
-        return [
+        return $this->mergeApiResponses([
             (string) $status => [
                 'description' => $this->responseDescription($status),
                 'content' => [
@@ -1164,7 +1165,84 @@ final class Generator
                     ],
                 ],
             ],
-        ];
+        ], $this->apiResponses($method));
+    }
+
+    /**
+     * @return list<ApiResponse>
+     */
+    private function apiResponses(ReflectionMethod $method): array
+    {
+        return array_map(
+            static fn (\ReflectionAttribute $attribute): ApiResponse => $attribute->newInstance(),
+            $method->getAttributes(ApiResponse::class),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $responses
+     * @param list<ApiResponse> $apiResponses
+     * @return array<string, mixed>
+     */
+    private function mergeApiResponses(array $responses, array $apiResponses): array
+    {
+        foreach ($apiResponses as $apiResponse) {
+            $status = (string) $apiResponse->status;
+
+            if ($status === '') {
+                continue;
+            }
+
+            $response = $this->responseFromApiResponse($apiResponse);
+
+            if ($status === '204') {
+                unset($response['content']);
+            }
+
+            $responses[$status] = isset($responses[$status]) && is_array($responses[$status])
+                ? array_replace($responses[$status], $response)
+                : $response;
+        }
+
+        ksort($responses);
+
+        return $responses;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function responseFromApiResponse(ApiResponse $apiResponse): array
+    {
+        $response = [];
+
+        if ($apiResponse->description !== null && $apiResponse->description !== '') {
+            $response['description'] = $apiResponse->description;
+        }
+
+        if ($apiResponse->content !== null) {
+            $response['content'] = $apiResponse->content;
+        }
+
+        if ($apiResponse->headers !== null) {
+            $response['headers'] = $apiResponse->headers;
+        }
+
+        if ($apiResponse->links !== null) {
+            $response['links'] = $apiResponse->links;
+        }
+
+        foreach ($apiResponse->extensions as $name => $value) {
+            if (is_string($name) && str_starts_with($name, 'x-')) {
+                $response[$name] = $value;
+            }
+        }
+
+        if (!isset($response['description'])) {
+            $response['description'] = '';
+        }
+
+        return $response;
     }
 
     private function responseStatus(ApiDoc $doc, string $httpMethod): int

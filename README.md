@@ -155,6 +155,33 @@ public function index(): Json
 }
 ```
 
+## 响应覆盖
+
+如果需要补充错误响应或覆盖默认响应描述，可以使用可重复的 `#[ApiResponse]`。同状态码响应会浅合并，不存在的状态码会追加；扩展字段只透传 `x-*`。`status` 可以是 HTTP 状态码或 `default`；响应会始终包含 `description`，`204` 响应会忽略 `content`。
+
+```php
+use Cvcv\ThinkOpenApi\Attribute\ApiResponse;
+
+#[ApiResponse(
+    status: 400,
+    description: '验证失败',
+    content: [
+        'application/json' => [
+            'schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'message' => ['type' => 'string'],
+                ],
+            ],
+        ],
+    ],
+)]
+public function save(): Json
+{
+    return json();
+}
+```
+
 ## Validate 规则
 
 当设置了 `ApiDoc::validate` 时，生成器会读取验证器中的 protected `$rule`、`$field` 和 `$scene` 属性。
