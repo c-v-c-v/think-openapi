@@ -5,6 +5,7 @@ namespace Cvcv\ThinkOpenApi\OpenApi;
 use Cvcv\ThinkOpenApi\Attribute\ApiDoc;
 use Cvcv\ThinkOpenApi\Attribute\ApiField;
 use Cvcv\ThinkOpenApi\Attribute\ApiGroup;
+use Cvcv\ThinkOpenApi\Attribute\ApiParam;
 use Cvcv\ThinkOpenApi\OpenApi\Response\ResponseSchemaFactory;
 use Cvcv\ThinkOpenApi\OpenApi\Response\ResultEnvelopeSchemaFactory;
 use Cvcv\ThinkOpenApi\OpenApi\Security\AuthRequirement;
@@ -173,6 +174,8 @@ final class Generator
         if ($httpMethod === 'get') {
             $parameters = array_merge($parameters, $this->queryParameters($rules, $fields));
         }
+
+        $parameters = $this->mergeApiParameters($parameters, $this->apiParams($method));
 
         $operation = [
             'summary' => $summary,
@@ -534,6 +537,113 @@ final class Generator
         $first = array_shift($segments);
 
         return $first . '[' . implode('][', $segments) . ']';
+    }
+
+    /**
+     * @return list<ApiParam>
+     */
+    private function apiParams(ReflectionMethod $method): array
+    {
+        return array_map(
+            static fn (\ReflectionAttribute $attribute): ApiParam => $attribute->newInstance(),
+            $method->getAttributes(ApiParam::class),
+        );
+    }
+
+    /**
+     * @param list<array<string, mixed>> $parameters
+     * @param list<ApiParam> $apiParams
+     * @return list<array<string, mixed>>
+     */
+    private function mergeApiParameters(array $parameters, array $apiParams): array
+    {
+        foreach ($apiParams as $apiParam) {
+            $parameter = $this->parameterFromApiParam($apiParam);
+
+            if ($parameter === null) {
+                continue;
+            }
+
+            $index = $this->parameterIndex($parameters, $parameter['name'], $parameter['in']);
+
+            if ($index === null) {
+                if ($parameter['in'] === 'path') {
+                    continue;
+                }
+
+                $parameters[] = $parameter;
+                continue;
+            }
+
+            $parameters[$index] = array_replace($parameters[$index], $parameter);
+
+            if ($parameters[$index]['in'] === 'path') {
+                $parameters[$index]['required'] = true;
+            }
+        }
+
+        return $parameters;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function parameterFromApiParam(ApiParam $apiParam): ?array
+    {
+        if ($apiParam->name === '' || !in_array($apiParam->in, ['query', 'path', 'header', 'cookie'], true)) {
+            return null;
+        }
+
+        $parameter = [
+            'name' => $apiParam->name,
+            'in' => $apiParam->in,
+        ];
+
+        if ($apiParam->required !== null || $apiParam->in === 'path') {
+            $parameter['required'] = $apiParam->in === 'path' ? true : $apiParam->required;
+        }
+
+        if ($apiParam->description !== null && $apiParam->description !== '') {
+            $parameter['description'] = $apiParam->description;
+        }
+
+        if ($apiParam->schema !== null) {
+            $parameter['schema'] = $apiParam->schema;
+        }
+
+        if ($apiParam->example !== null) {
+            $parameter['example'] = $apiParam->example;
+        }
+
+        if ($apiParam->examples !== null) {
+            $parameter['examples'] = $apiParam->examples;
+        }
+
+        if ($apiParam->deprecated !== null) {
+            $parameter['deprecated'] = $apiParam->deprecated;
+        }
+
+        foreach ($apiParam->extensions as $name => $value) {
+            if (is_string($name) && str_starts_with($name, 'x-')) {
+                $parameter[$name] = $value;
+            }
+        }
+
+        return $parameter;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $parameters
+     */
+    private function parameterIndex(array $parameters, string $name, string $in): ?int
+    {
+        foreach ($parameters as $index => $parameter) {
+            if (($parameter['name'] ?? null) === $name && ($parameter['in'] ?? null) === $in) {
+                return $index;
+            }
+        }
+
+        return null;
     }
 
     /**

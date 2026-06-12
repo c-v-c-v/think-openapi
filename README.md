@@ -129,6 +129,32 @@ public function index(): Json
 }
 ```
 
+## 参数覆盖
+
+如果 Validate 或路由参数推导不够精确，可以使用可重复的 `#[ApiParam]` 覆盖已有参数，或追加 header、cookie 等参数。同名且 `in` 相同的参数会合并；path 参数始终保持 `required: true`，且只能覆盖路由模板中已经存在的 path 参数。
+
+```php
+use Cvcv\ThinkOpenApi\Attribute\ApiParam;
+
+#[ApiParam(
+    name: 'page[number]',
+    in: 'query',
+    description: '页码',
+    schema: ['type' => 'integer', 'minimum' => 1],
+    example: 1,
+)]
+#[ApiParam(
+    name: 'X-Request-ID',
+    in: 'header',
+    description: '请求 ID',
+    schema: ['type' => 'string'],
+)]
+public function index(): Json
+{
+    return json();
+}
+```
+
 ## Validate 规则
 
 当设置了 `ApiDoc::validate` 时，生成器会读取验证器中的 protected `$rule`、`$field` 和 `$scene` 属性。
