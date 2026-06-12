@@ -312,25 +312,34 @@ final class OpenApiLinter
                     continue;
                 }
 
-                $schema = $operation['requestBody']['content']['application/json']['schema'] ?? null;
+                $content = $operation['requestBody']['content'] ?? null;
 
-                if (!is_array($schema)) {
+                if (!is_array($content)) {
                     continue;
                 }
 
-                $location = sprintf(
-                    '#/paths/%s/%s/requestBody/content/application~1json/schema',
-                    $this->escapeJsonPointer((string) $path),
-                    $method,
-                );
+                foreach ($content as $contentType => $mediaType) {
+                    $schema = is_array($mediaType) ? ($mediaType['schema'] ?? null) : null;
 
-                $resolvedSchema = $this->schemaForLint($openApi, $schema);
+                    if (!is_array($schema)) {
+                        continue;
+                    }
 
-                if ($resolvedSchema === null) {
-                    continue;
+                    $location = sprintf(
+                        '#/paths/%s/%s/requestBody/content/%s/schema',
+                        $this->escapeJsonPointer((string) $path),
+                        $method,
+                        $this->escapeJsonPointer((string) $contentType),
+                    );
+
+                    $resolvedSchema = $this->schemaForLint($openApi, $schema);
+
+                    if ($resolvedSchema === null) {
+                        continue;
+                    }
+
+                    $this->lintEmptyProperties($resolvedSchema, $location);
                 }
-
-                $this->lintEmptyProperties($resolvedSchema, $location);
             }
         }
     }

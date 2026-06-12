@@ -188,7 +188,7 @@ public function save(): Json
 
 对于 `GET` 接口，验证规则会转换为 query 参数。点号字段会转换为方括号参数名，例如 `page.number` 会变成 `page[number]`。
 
-对于 `POST`、`PUT` 和 `PATCH` 接口，验证规则会转换为 `application/json` 请求体 schema。点号字段会转换为嵌套对象属性。
+对于 `POST`、`PUT` 和 `PATCH` 接口，验证规则会转换为请求体 schema。默认使用 `application/json`；如果规则包含 `file`、`image`、`fileExt`、`fileMime` 或 `fileSize`，会使用 `multipart/form-data`。点号字段会转换为嵌套对象属性。
 
 ```php
 <?php
@@ -246,6 +246,7 @@ final class UserValidate extends Validate
 - `multipleOf:n` -> `multipleOf`
 - `in:a,b,c` -> 按字段类型生成内联 enum 值
 - `notIn:a,b,c` -> `not.enum`
+- `file` / `image` / `fileExt` / `fileMime` / `fileSize` -> `multipart/form-data` 文件字段，schema 为 `type: string`、`format: binary`，ThinkPHP 文件约束保留在 `x-thinkphp-rule`
 - `regex:/.../` -> `pattern`；带修饰符或无法安全转换时保留 `x-thinkphp-rule`
 - `alpha`、`alphaNum`、`alphaDash`、`chs`、`chsAlpha`、`chsAlphaNum`、`chsDash`、`mobile`、`idCard`、`zip` -> 基于 ThinkPHP 内置正则生成 `pattern`
 - `['max' => 10]`、`['in' => ['a', 'b']]` 等关联数组规则会按 ThinkPHP 规则名归一化后推导

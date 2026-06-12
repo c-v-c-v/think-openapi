@@ -27,6 +27,11 @@ final class ValidateRuleSchemaMapper
             'type' => $this->schemaTypeFromRuleParts($parts),
         ];
 
+        if ($this->isFileUpload($rule)) {
+            $schema['type'] = 'string';
+            $schema['format'] = 'binary';
+        }
+
         if ($description !== null && $description !== '') {
             $schema['description'] = $description;
         }
@@ -136,6 +141,11 @@ final class ValidateRuleSchemaMapper
                 $schema['not'] = [
                     'enum' => $this->ruleValueList($part, 6, $schema['type']),
                 ];
+                continue;
+            }
+
+            if ($this->isFileUploadConstraint($part)) {
+                $this->applyFileUploadRule($schema, $part);
             }
         }
 
@@ -145,6 +155,28 @@ final class ValidateRuleSchemaMapper
     public function isRequired(mixed $rule): bool
     {
         return in_array('require', $this->ruleParts($rule), true);
+    }
+
+    public function hasFileUpload(array $rules): bool
+    {
+        foreach ($rules as $rule) {
+            if ($this->isFileUpload($rule)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function isFileUpload(mixed $rule): bool
+    {
+        foreach ($this->ruleParts($rule) as $part) {
+            if ($this->isFileUploadRule($part)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -251,6 +283,45 @@ final class ValidateRuleSchemaMapper
         }
 
         return 'string';
+    }
+
+    private function isFileUploadRule(string $part): bool
+    {
+        return $part === 'file'
+            || $part === 'image'
+            || $this->isFileUploadConstraint($part);
+    }
+
+    private function isFileUploadConstraint(string $part): bool
+    {
+        return str_starts_with($part, 'image:')
+            || str_starts_with($part, 'fileExt:')
+            || str_starts_with($part, 'fileMime:')
+            || str_starts_with($part, 'fileSize:');
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     */
+    private function applyFileUploadRule(array &$schema, string $part): void
+    {
+        if (str_starts_with($part, 'fileMime:')) {
+            $mimeTypes = $this->ruleCsvValues($part, 9);
+
+            if (count($mimeTypes) === 1) {
+                $schema['contentMediaType'] = $mimeTypes[0];
+            }
+        }
+
+        if (str_starts_with($part, 'image:')) {
+            $mediaType = $this->imageMediaType($part);
+
+            if ($mediaType !== null) {
+                $schema['contentMediaType'] = $mediaType;
+            }
+        }
+
+        $this->preserveThinkPhpRule($schema, $part);
     }
 
     /**
@@ -379,8 +450,40 @@ final class ValidateRuleSchemaMapper
     {
         return array_map(
             fn (string $value): int|float|bool|string => $this->castRuleValue(trim($value), $schemaType),
-            explode(',', substr($part, $offset)),
+            $this->ruleCsvValues($part, $offset),
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function ruleCsvValues(string $part, int $offset): array
+    {
+        return array_values(array_filter(
+            array_map(trim(...), explode(',', substr($part, $offset))),
+            static fn (string $value): bool => $value !== '',
+        ));
+    }
+
+    private function imageMediaType(string $part): ?string
+    {
+        $values = $this->ruleCsvValues($part, 6);
+        $type = null;
+
+        if (isset($values[0]) && str_starts_with($values[0], 'type=')) {
+            $type = substr($values[0], 5);
+        } elseif (isset($values[2])) {
+            $type = $values[2];
+        }
+
+        if ($type === null || $type === '') {
+            return null;
+        }
+
+        $type = strtolower($type);
+        $type = $type === 'jpg' ? 'jpeg' : $type;
+
+        return 'image/' . $type;
     }
 
     private function castRuleValue(string $value, string $schemaType): int|float|bool|string

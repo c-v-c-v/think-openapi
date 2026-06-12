@@ -203,10 +203,14 @@ final class Generator
         }
 
         if (in_array($httpMethod, ['post', 'put', 'patch'], true) && $rules !== []) {
+            $requestContentType = $this->ruleSchemaMapper->hasFileUpload($rules)
+                ? 'multipart/form-data'
+                : 'application/json';
+
             $operation['requestBody'] = [
                 'required' => $doc->requestFieldsRequired,
                 'content' => [
-                    'application/json' => [
+                    $requestContentType => [
                         'schema' => $this->requestBodySchemaBuilder->objectSchema(
                             $rules,
                             $doc->requestFieldsRequired,
