@@ -408,10 +408,39 @@ return [
         'stoplight' => 'docs/api/stoplight',
         'json' => 'docs/api.json',
     ],
+    'ui' => [
+        'scalar' => [
+            'script_url' => 'https://cdn.jsdelivr.net/npm/@scalar/api-reference',
+        ],
+        'stoplight' => [
+            'script_url' => 'https://unpkg.com/@stoplight/elements/web-components.min.js',
+            'styles_url' => 'https://unpkg.com/@stoplight/elements/styles.min.css',
+        ],
+    ],
 ];
 ```
 
 当 `app.env` 命中 `production_envs` 时，文档路由会返回 404。生产环境建议主动生成并发布 JSON 文件，不建议在每次请求时重新生成。
+
+## 离线文档 UI
+
+默认文档页面通过 CDN 加载 Scalar 和 Stoplight Elements。内网或离线环境可以只覆盖资源 URL，不需要复制或改写内置模板：
+
+```php
+return [
+    'ui' => [
+        'scalar' => [
+            'script_url' => '/assets/openapi/scalar.js',
+        ],
+        'stoplight' => [
+            'script_url' => '/assets/openapi/stoplight-elements.js',
+            'styles_url' => '/assets/openapi/stoplight-elements.css',
+        ],
+    ],
+];
+```
+
+如果需要完全自定义 HTML，仍然可以通过 `views_path` 指向自己的 `scalar.html` 和 `stoplight.html`。内置模板会对配置值进行 HTML 转义。
 
 ## 命令
 
@@ -445,6 +474,17 @@ php think docs:lint
 6. 根据 Validate 规则生成请求参数或请求体 schema。
 7. 将响应 `SchemaProvider` 注册到 `components.schemas`。
 8. 通过 middleware security inspector 添加 operation `security` 和 `components.securitySchemes`。
+
+## 路由支持边界
+
+生成器只处理可以解析到控制器方法的路由 action：
+
+- `[Controller::class, 'method']`
+- `Controller/method` 字符串，其中 `Controller` 是已存在的完整类名，或位于当前应用命名空间下的控制器类名
+
+只有方法存在、HTTP 方法是 `GET`、`POST`、`PUT`、`PATCH` 或 `DELETE`，并且方法带有 `#[ApiDoc]` 时，才会生成 OpenAPI operation。闭包路由、无法解析到类方法的路由、未加 `#[ApiDoc]` 的方法，以及当前不支持的 HTTP 方法会被跳过。
+
+`docs:lint` 会对可疑跳过项给出提示：带 `#[ApiDoc]` 但使用不支持 HTTP 方法的路由会报告 `unsupported-route-method`；看起来像控制器 action 但无法解析到现有方法的路由会报告 `unsupported-route-action`。普通闭包路由不会被视为 lint 问题。
 
 ## 开发
 

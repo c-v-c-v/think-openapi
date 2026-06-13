@@ -28,6 +28,7 @@ final readonly class ApiDocs
         return $this->render('scalar', [
             'title' => $this->title(),
             'specUrl' => $this->specUrl(),
+            'scalarScriptUrl' => $this->scalarScriptUrl(),
         ]);
     }
 
@@ -40,6 +41,8 @@ final readonly class ApiDocs
         return $this->render('stoplight', [
             'title' => $this->title(),
             'specUrl' => $this->specUrl(),
+            'stoplightScriptUrl' => $this->stoplightScriptUrl(),
+            'stoplightStylesUrl' => $this->stoplightStylesUrl(),
         ]);
     }
 
@@ -73,6 +76,30 @@ final readonly class ApiDocs
     private function specUrl(): string
     {
         return (string) $this->app->config->get('openapi.json_url', '/docs/api.json');
+    }
+
+    private function scalarScriptUrl(): string
+    {
+        return (string) $this->app->config->get(
+            'openapi.ui.scalar.script_url',
+            'https://cdn.jsdelivr.net/npm/@scalar/api-reference',
+        );
+    }
+
+    private function stoplightScriptUrl(): string
+    {
+        return (string) $this->app->config->get(
+            'openapi.ui.stoplight.script_url',
+            'https://unpkg.com/@stoplight/elements/web-components.min.js',
+        );
+    }
+
+    private function stoplightStylesUrl(): string
+    {
+        return (string) $this->app->config->get(
+            'openapi.ui.stoplight.styles_url',
+            'https://unpkg.com/@stoplight/elements/styles.min.css',
+        );
     }
 
     private function regenerateOnRequest(): bool

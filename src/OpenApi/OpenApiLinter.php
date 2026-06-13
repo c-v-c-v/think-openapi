@@ -10,6 +10,8 @@ use think\App;
 
 final class OpenApiLinter
 {
+    private const SUPPORTED_HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete'];
+
     /**
      * @var list<OpenApiLintIssue>
      */
@@ -30,6 +32,7 @@ final class OpenApiLinter
     {
         $this->issues = [];
         $routes = $this->routeList();
+        $this->lintUnsupportedRoutes($routes);
         $documentedRoutes = $this->documentedRoutes($routes);
 
         $this->lintRoutes($documentedRoutes);
@@ -95,7 +98,7 @@ final class OpenApiLinter
 
             $httpMethod = strtolower((string) ($route['method'] ?? ''));
 
-            if (!in_array($httpMethod, ['get', 'post', 'put', 'patch', 'delete'], true)) {
+            if (!in_array($httpMethod, self::SUPPORTED_HTTP_METHODS, true)) {
                 continue;
             }
 
@@ -109,6 +112,85 @@ final class OpenApiLinter
         }
 
         return $documented;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $routes
+     */
+    private function lintUnsupportedRoutes(array $routes): void
+    {
+        foreach ($routes as $route) {
+            $action = $route['route'] ?? null;
+            $endpoint = $this->endpointFromRoute($action);
+
+            if ($endpoint === null) {
+                if ($this->looksLikeControllerAction($action)) {
+                    $this->addIssue(
+                        'unsupported-route-action',
+                        (string) ($route['rule'] ?? ''),
+                        sprintf('Route action [%s] is not a supported controller method action.', $this->routeActionName($action)),
+                    );
+                }
+
+                continue;
+            }
+
+            [$class, $method] = $endpoint;
+
+            if (!class_exists($class) || !method_exists($class, $method)) {
+                $this->addIssue(
+                    'unsupported-route-action',
+                    (string) ($route['rule'] ?? ''),
+                    sprintf('Route action [%s::%s] cannot be resolved to an existing controller method.', $class, $method),
+                );
+
+                continue;
+            }
+
+            $reflection = new ReflectionMethod($class, $method);
+
+            if (!$this->apiDoc($reflection) instanceof ApiDoc) {
+                continue;
+            }
+
+            $httpMethod = strtolower((string) ($route['method'] ?? ''));
+
+            if (!in_array($httpMethod, self::SUPPORTED_HTTP_METHODS, true)) {
+                $this->addIssue(
+                    'unsupported-route-method',
+                    (string) ($route['rule'] ?? ''),
+                    sprintf('Documented route [%s::%s] uses unsupported HTTP method [%s].', $class, $method, (string) ($route['method'] ?? '')),
+                );
+            }
+        }
+    }
+
+    private function looksLikeControllerAction(mixed $action): bool
+    {
+        if (is_array($action) && isset($action[0], $action[1])) {
+            return is_string($action[0]) && is_string($action[1]);
+        }
+
+        if (!is_string($action) || !str_contains($action, '/')) {
+            return false;
+        }
+
+        [$class] = explode('/', $action, 2);
+
+        return str_contains($class, '\\') || str_starts_with($class, $this->app->getNamespace() . '\\');
+    }
+
+    private function routeActionName(mixed $action): string
+    {
+        if (is_array($action)) {
+            return json_encode($action, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'array';
+        }
+
+        if (is_object($action)) {
+            return $action::class;
+        }
+
+        return (string) $action;
     }
 
     /**
@@ -405,7 +487,7 @@ final class OpenApiLinter
 
     private function metadataReader(): ValidateMetadataReader
     {
-        return $this->validateMetadataReader ?? new ValidateMetadataReader();
+        return $this->validateMetadataReader ?? new ValidateMetadataReader($this->app);
     }
 
     private function ruleMapper(): ValidateRuleSchemaMapper

@@ -13,7 +13,7 @@
 </head>
 <body>
 <div id="app"></div>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+<script src="{$scalarScriptUrl|htmlentities}"></script>
 <script>
     Scalar.createApiReference('#app', {
         url: '{$specUrl|htmlentities}',

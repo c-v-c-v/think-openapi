@@ -45,7 +45,7 @@ final class Generator
     {
         $this->ruleSchemaMapper = $ruleSchemaMapper ?? new ValidateRuleSchemaMapper();
         $this->requestBodySchemaBuilder = $requestBodySchemaBuilder ?? new RequestBodySchemaBuilder($this->ruleSchemaMapper);
-        $this->validateMetadataReader = $validateMetadataReader ?? new ValidateMetadataReader();
+        $this->validateMetadataReader = $validateMetadataReader ?? new ValidateMetadataReader($app);
     }
 
     public function generate(): array

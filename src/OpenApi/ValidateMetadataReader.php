@@ -4,11 +4,18 @@ namespace Cvcv\ThinkOpenApi\OpenApi;
 
 use Cvcv\ThinkOpenApi\Attribute\ApiDoc;
 use Cvcv\ThinkOpenApi\Attribute\ApiField;
+use ReflectionClass;
 use ReflectionProperty;
+use Throwable;
+use think\App;
 use think\Validate;
 
 final class ValidateMetadataReader
 {
+    public function __construct(private readonly ?App $app = null)
+    {
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -80,9 +87,44 @@ final class ValidateMetadataReader
             return null;
         }
 
-        $validator = new $doc->validate();
+        $validator = $this->makeValidator($doc->validate);
 
         return $validator instanceof Validate ? $validator : null;
+    }
+
+    /**
+     * @param class-string $class
+     */
+    private function makeValidator(string $class): ?object
+    {
+        if ($this->app !== null) {
+            try {
+                return $this->app->make($class);
+            } catch (Throwable) {
+            }
+        }
+
+        try {
+            $reflection = new ReflectionClass($class);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (!$reflection->isInstantiable()) {
+            return null;
+        }
+
+        $constructor = $reflection->getConstructor();
+
+        if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
+            return null;
+        }
+
+        try {
+            return $reflection->newInstance();
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function protectedProperty(object $object, string $name): mixed

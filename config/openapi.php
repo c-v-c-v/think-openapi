@@ -19,6 +19,15 @@ return [
         'stoplight' => 'docs/api/stoplight',
         'json' => 'docs/api.json',
     ],
+    'ui' => [
+        'scalar' => [
+            'script_url' => 'https://cdn.jsdelivr.net/npm/@scalar/api-reference',
+        ],
+        'stoplight' => [
+            'script_url' => 'https://unpkg.com/@stoplight/elements/web-components.min.js',
+            'styles_url' => 'https://unpkg.com/@stoplight/elements/styles.min.css',
+        ],
+    ],
     'views_path' => null,
     'response_schema_factory' => ResultEnvelopeSchemaFactory::class,
     'security' => [
